@@ -83,6 +83,10 @@ textarea{width:100%;height:84px;font:11px monospace;user-select:text;-webkit-use
 .ri{box-sizing:border-box;width:3.7em;height:1.3em;padding:0;text-align:center;text-transform:uppercase;background:#fff;color:#1b1030;text-shadow:none;border:.8cqh solid #f2b705;border-radius:2cqh;font-size:17cqh;user-select:text;-webkit-user-select:text;touch-action:auto}
 .rb{display:flex;flex-wrap:wrap;gap:2.4cqh;justify-content:center}
 .rm .rb button{min-height:14cqh;padding:0 4cqh;font-size:5.6cqh;font-weight:700;text-align:center;border-radius:2cqh;touch-action:manipulation}
+.rn{box-sizing:border-box;width:46cqh;height:12cqh;padding:0 2cqh;font:700 5.6cqh system-ui;text-align:center;background:#fff;color:#1b1030;border:.8cqh solid #f2b705;border-radius:2cqh;user-select:text;-webkit-user-select:text;touch-action:auto}
+.rrl{display:flex;flex-direction:column;gap:1.6cqh;width:46cqh;max-height:62cqh;overflow-y:auto}
+.rrl button{min-height:12cqh;padding:0 2.4cqh;font-size:4.6cqh;text-align:left;border-radius:2cqh}
+.rrl p{font-size:4cqh}
 .rq{width:34cqh;height:34cqh;flex:none;padding:1.5cqh;box-sizing:border-box;background:#fff;border-radius:2cqh}
 </style>
 </head>
@@ -222,10 +226,10 @@ function setMode(i){md=i;if(net)send({t:'mode',v:i});pickMenu('Режим: '+MN[
 function pickMenu(msg){show('<h1>Выбери стенд</h1><p>'+(msg||'')+'</p><div class="grid">'+ST.map((s,i)=>`<button style="border-left:10px solid ${s.c};display:flex;align-items:center;gap:8px" onclick="pick(${i})">${SPR[s.n]?`<i style="flex:0 0 44px;text-align:center;line-height:0"><img src="${SPR[s.n].src}" style="image-rendering:pixelated"></i>`:''}<span><b>${s.n}</b><small>${s.a.map(a=>a.n).join(' · ')}</small></span></button>`).join('')+'</div>'+(net?'':'<p></p><button onclick="menu()">← Назад</button>'))}
 function mpm(){show('<h1>Мультиплеер</h1><p>Кооп на двоих. Создай комнату и отправь код другу или введи код друга.</p><div class="grid"><button onclick="hostGo()"><b>Создать комнату</b><small>Ты хост</small></button><button onclick="joinGo()"><b>Войти в комнату</b><small>Нужен код хоста</small></button></div><p></p><button onclick="menu()">← Назад</button>')}
 const RC={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:['turn:free.expressturn.com:3478','turn:free.expressturn.com:3478?transport=tcp'],username:'000000002109219354',credential:'mw41K4HAyzfAV2UQDkwgWg0'}]},SIGNAL_URL=''; /* TURN (ExpressTURN) нужен, когда игроки в разных сетях и прямое соединение не проходит */ /* SIGNAL_URL: адрес signaling-сервера (ws://хост:порт или wss://хост). Пусто = тот же хост, откуда открыта страница */
-let sgws=null,sgcode='',sgq=[],sgtm=0,sgct=0,sgp=Promise.resolve();
+let sgws=null,sgcode='',sgq=[],sgtm=0,sgct=0,sgp=Promise.resolve(),sgli=0,rmpub=1;
 const send=o=>{try{dc&&dc.readyState=='open'&&dc.send(JSON.stringify(o))}catch(e){}};
 const sgSend=o=>{try{sgws&&sgws.readyState==1&&sgws.send(JSON.stringify(o))}catch(e){}};
-function sgClose(){clearTimeout(sgtm);clearTimeout(sgct);const s=sgws;sgws=null;sgcode='';sgq=[];if(s){s.onopen=s.onclose=s.onmessage=s.onerror=null;try{s.close()}catch(e){}}}
+function sgClose(){clearTimeout(sgtm);clearTimeout(sgct);clearInterval(sgli);const s=sgws;sgws=null;sgcode='';sgq=[];if(s){s.onopen=s.onclose=s.onmessage=s.onerror=null;try{s.close()}catch(e){}}}
 function reset(){const n=net;net=dc=null;isH=0;sgClose();try{n&&n.close()}catch(e){}menu()}
 function setDC(){const d=dc;d.onopen=()=>{if(dc!==d)return;clearTimeout(sgtm);hs=gs=null;if(isH)modeMenu('Подключено! Выбери режим.');else show('<h1>Подключено!</h1><p>Хост выбирает режим…</p>')};d.onmessage=e=>onMsg(JSON.parse(e.data));d.onclose=()=>{if(net&&dc===d){const n=net;net=dc=null;run=0;sgClose();try{n.close()}catch(e){}menu('Игрок отключился.')}}}
 /* ---- экраны комнаты (кнопки не должны иметь onclick="hostGo()": на него завязан CSS меню) ---- */
@@ -243,13 +247,18 @@ async function sgSig(d){try{if(d.sdp){if(!net)mkPC();await net.setRemoteDescript
 function sgOnMsg(m){if(dc&&dc.readyState=='open')return;const t=m.t;
 if(t=='created'){sgcode=String(m.code||'');rmHost()}
 else if(t=='joined'){}
+else if(t=='rooms')rmList(m.list)
 else if(t=='peer'&&isH){const s=$('rs');if(s)s.textContent='Игрок вошёл. Подключаем…';sgOffer()}
 else if(t=='sig'&&m.d&&typeof m.d=='object')sgp=sgp.then(()=>sgSig(m.d))
 else if(t=='left'){if(isH){const n=net;net=dc=null;try{n&&n.close()}catch(e){}clearTimeout(sgtm);sgq=[];const s=$('rs');if(s)s.textContent='Игрок отключился. Ждём игрока…'}else rmErr('Игрок отключился')}
 else if(t=='err')rmErr({full:'Комната заполнена',none:'Комната не найдена',busy:'Сервер занят, попробуй позже',timeout:'Комната закрыта: никто не вошёл'}[m.e]||'Ошибка')}
-function hostGo(){const n=net;net=dc=null;try{n&&n.close()}catch(e){}isH=1;rmShow('<div class="rl"><h1>Создаём комнату…</h1></div>');sgOpen({t:'create'})}
-function joinGo(c){const n=net;net=dc=null;try{n&&n.close()}catch(e){}isH=0;sgClose();c=typeof c=='string'?c.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4):'';rmShow('<div class="rl"><h1>Код комнаты</h1><input id="rc" class="ri" maxlength="4" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" value="'+c+'"><div class="rb"><button onclick="joinOk()">Подключиться</button><button onclick="reset()">Назад</button></div></div>');$('rc').onkeydown=e=>{if(e.key=='Enter')joinOk()}}
-function joinOk(){const i=$('rc');if(!i)return;const c=i.value.toUpperCase().replace(/[^A-Z0-9]/g,'');if(c.length!=4){i.focus();return}rmShow('<div class="rl"><h1>Подключаемся…</h1></div>');sgOpen({t:'join',code:c})}
+const esc=t=>String(t).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
+function hostGo(){const n=net;net=dc=null;try{n&&n.close()}catch(e){}isH=1;sgClose();rmpub=1;let nk='';try{nk=localStorage.getItem('nick')||''}catch(e){}rmShow('<div class="rl"><h1>Новая комната</h1><input id="rn" class="rn" maxlength="16" autocomplete="off" placeholder="Твой ник" value="'+esc(nk)+'"><button id="rpb" onclick="rmPub()">🌐 Видна всем</button><div class="rb"><button onclick="hostMk()">Создать</button><button onclick="reset()">Назад</button></div></div>')}
+function rmPub(){rmpub=rmpub?0:1;const b=$('rpb');if(b)b.textContent=rmpub?'🌐 Видна всем':'🔒 Только по коду'}
+function hostMk(){const nk=($('rn').value||'').trim().slice(0,16)||'Игрок';try{localStorage.setItem('nick',nk)}catch(e){}rmShow('<div class="rl"><h1>Создаём комнату…</h1></div>');sgOpen({t:'create',pub:rmpub,name:nk})}
+function rmList(l){const e=$('rr');if(!e||!Array.isArray(l))return;l=l.filter(r=>r&&/^[A-Z0-9]{4}$/.test(r.code));e.innerHTML=l.length?l.map(r=>'<button onclick="joinOk(\''+r.code+'\')"><b>'+esc(r.name)+'</b><small>'+r.code+' · 1/2</small></button>').join(''):'<p>Пока нет открытых комнат</p>'}
+function joinGo(c){const n=net;net=dc=null;try{n&&n.close()}catch(e){}isH=0;sgClose();c=typeof c=='string'?c.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4):'';rmShow('<div class="rl"><h1>Код комнаты</h1><input id="rc" class="ri" maxlength="4" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" value="'+c+'"><div class="rb"><button onclick="joinOk()">Подключиться</button><button onclick="reset()">Назад</button></div></div><div class="rl rr"><h1>Открытые комнаты</h1><div id="rr" class="rrl"><p>Ищем…</p></div></div>');$('rc').onkeydown=e=>{if(e.key=='Enter')joinOk()};sgOpen({t:'list'});sgli=setInterval(()=>sgSend({t:'list'}),3000)}
+function joinOk(c0){const i=$('rc');const c=(c0||(i&&i.value)||'').toUpperCase().replace(/[^A-Z0-9]/g,'');if(c.length!=4){i&&i.focus();return}isH=0;clearInterval(sgli);rmShow('<div class="rl"><h1>Подключаемся…</h1></div>');if(sgws&&sgws.readyState==1)sgSend({t:'join',code:c});else sgOpen({t:'join',code:c})}
 function pick(i){if(!net){start(i);return}if(isH){hs=i;show('<h1>Ждём выбор друга…</h1>');tryGo()}else{send({t:'pick',i});show('<h1>Ждём хоста…</h1>')}}
 function tryGo(){if(hs!=null&&gs!=null){const a=[hs,gs];hs=gs=null;send({t:'go',a,md});start(a[0],a[1])}}
 const R1=v=>Math.round(v*10)/10;
@@ -423,7 +432,7 @@ function mainMenu(){show('<div class="mm"><button class="g1" onclick="menu()"><b
 function quitGame(){try{if(navigator.app&&navigator.app.exitApp){navigator.app.exitApp();return}}catch(e){}try{window.close()}catch(e){}setTimeout(()=>{location.href='about:blank'},200)}
 const _menu=menu;menu=function(msg){_menu(msg);const m=$('m'),b=m.querySelectorAll('.grid button');b[0].innerHTML='<span>Singleplayer</span>';b[1].innerHTML='<span>Multiplayer<br>(coop with two)</span>';m.querySelector('p').hidden=!msg;m.insertAdjacentHTML('beforeend','<button class="bk" onclick="mainMenu()">← Назад</button>')};
 mainMenu();
-{const c=(new URLSearchParams(location.search).get('room')||'').toUpperCase().replace(/[^A-Z0-9]/g,'');if(c.length==4){joinGo(c);joinOk()}}
+{const c=(new URLSearchParams(location.search).get('room')||'').toUpperCase().replace(/[^A-Z0-9]/g,'');if(c.length==4)joinOk(c)}
 </script>
 </body>
 </html>

@@ -8,6 +8,7 @@ const PORT = +process.env.PORT || 3000;
 const ALPHA = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // без похожих символов: I L O 0 1
 const WAIT_MS = +process.env.WAIT_MS || 10 * 60 * 1000; // комната без второго игрока живёт 10 минут
 const MAX_ROOMS = 500, MAX_MSG = 16 * 1024;
+const cleanName = t => (typeof t === 'string' ? t : '').replace(/[\u0000-\u001f<>"'&\\]/g, '').trim().slice(0, 16) || 'Игрок';
 const rooms = new Map(); // код -> { h: сокет хоста, g: сокет гостя | null, tm: таймер }
 
 const server = http.createServer((req, res) => {
@@ -64,7 +65,7 @@ wss.on('connection', ws => {
       if (ws.room) return send(ws, { t: 'err', e: 'bad' });
       const c = rooms.size < MAX_ROOMS && newCode();
       if (!c) return send(ws, { t: 'err', e: 'busy' });
-      const r = { h: ws, g: null, tm: 0 }; rooms.set(c, r); ws.room = c; arm(c, r);
+      const r = { h: ws, g: null, tm: 0, pub: m.pub !== 0 && m.pub !== false, name: cleanName(m.name) }; rooms.set(c, r); ws.room = c; arm(c, r);
       send(ws, { t: 'created', code: c });
     } else if (m.t === 'join') {
       if (ws.room) return send(ws, { t: 'err', e: 'bad' });
@@ -74,6 +75,10 @@ wss.on('connection', ws => {
       if (r.g) return send(ws, { t: 'err', e: 'full' });
       r.g = ws; ws.room = c; clearTimeout(r.tm);
       send(ws, { t: 'joined' }); send(r.h, { t: 'peer' });
+    } else if (m.t === 'list') { // открытые комнаты, в которых ждут второго игрока
+      const list = [];
+      for (const [code, r] of rooms) if (r.pub && !r.g && list.length < 30) list.push({ code, name: r.name });
+      send(ws, { t: 'rooms', list });
     } else if (m.t === 'sig') { // пересылаем только offer/answer/ICE второму игроку
       const r = rooms.get(ws.room), d = m.d; if (!r || !d || typeof d !== 'object') return;
       const o = ws === r.h ? r.g : r.h;
